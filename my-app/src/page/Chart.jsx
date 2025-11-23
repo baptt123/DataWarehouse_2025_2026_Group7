@@ -1,102 +1,78 @@
-import React, { useState } from 'react'
-import MetricChart from '../component/MetricChart'
 
-const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+import React, { useState, useEffect } from 'react';
+import MetricChart from '../component/MetricChart'; // import chart component
 
-// Dữ liệu mẫu 12 tháng (thay bằng dữ liệu thực nếu cần)
-const DATA = {
-  temperature: {
-    label: 'Nhiệt độ (°C)',
-    unit: '°C',
-    values: [2, 3, 7, 12, 17, 21, 24, 24, 20, 14, 8, 4],
-    color: '#ef4444'
-  },
-  perceived: {
-    label: 'Nhiệt độ cảm nhận (°C)',
-    unit: '°C',
-    values: [1, 2, 6, 11, 16, 20, 23, 23, 19, 13, 7, 3],
-    color: '#f97316'
-  },
-  humidity: {
-    label: 'Độ ẩm (%)',
-    unit: '%',
-    values: [78, 75, 72, 68, 66, 63, 61, 62, 67, 73, 76, 80],
-    color: '#0ea5e9'
-  },
-  windSpeed: {
-    label: 'Tốc độ gió (m/s)',
-    unit: 'm/s',
-    values: [4.2,3.8,4.0,3.7,3.1,2.7,2.4,2.6,3.0,3.5,4.0,4.3],
-    color: '#10b981'
-  }
-}
+export default function Chart({ city }) {  // <-- nhận city từ props
+  const [metricKey, setMetricKey] = useState('humidity'); 
+  const [weatherData, setWeatherData] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-export default function Chart() {
-  const [metricKey, setMetricKey] = useState('humidity') // mặc định chọn độ ẩm
+  useEffect(() => {
+    if (!city) return; // tránh fetch khi city rỗng
+    setLoading(true);
 
-  const metric = DATA[metricKey]
-  const average = metric.values.reduce((s,v)=>s+v,0) / metric.values.length
+    fetch(`http://127.0.0.1:5000/api/weather-metrics?city=${city}`)
+      .then(res => res.json())
+      .then(data => {
+         console.log(data);
+        if(data.status === "success"){
+          setWeatherData(data.data);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, [city]); // <-- fetch lại khi city thay đổi
+
+  if(loading) return <div className="text-white p-4">Loading chart...</div>;
+  if(!weatherData.length) return <div className="text-white p-4">No data available</div>;
+
+  const labels = weatherData.map(d => d.forecast_date);
+  const values = weatherData.map(d =>
+    metricKey === 'humidity'
+      ? Number(d.humidity)
+      : Number(d.wind_speed)
+  );
+  const color = metricKey === 'humidity' ? '#0ea5e9' : '#10b981';
+  const unit = metricKey === 'humidity' ? '%' : 'm/s';
+  const average = values.reduce((s,v)=>s+v,0)/(values.length || 1);
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="max-w-4xl mx-auto">
         <header className="mb-6">
-          <h1 className="text-2xl font-semibold text-slate-800">The chart of month</h1>
-          <p className="text-slate-600 text-sm mt-1">Select a metric to view the 12-month bar chart and the average line.</p>
+          <h1 className="text-2xl font-semibold text-slate-800">Weather Forecast Next 6 Days</h1>
         </header>
 
         <section className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex gap-2">
-              {/* Nhiệt độ */}
               <button
-                onClick={() => setMetricKey('temperature')}
-                className={`px-3 py-1 rounded ${metricKey === 'temperature' ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-700'}`}
+                onClick={()=>setMetricKey('humidity')}
+                className={`px-3 py-1 rounded ${metricKey==='humidity'?'bg-sky-500 text-white':'bg-slate-100 text-slate-700'}`}
               >
-                temperature
+                Humidity
               </button>
-              {/* Nhiệt độ cảm nhận */}
               <button
-                onClick={() => setMetricKey('perceived')}
-                className={`px-3 py-1 rounded ${metricKey === 'perceived' ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-700'}`}
+                onClick={()=>setMetricKey('wind_speed')}
+                className={`px-3 py-1 rounded ${metricKey==='wind_speed'?'bg-emerald-500 text-white':'bg-slate-100 text-slate-700'}`}
               >
-                perceived
-              </button>
-              {/* Độ ẩm */}
-              <button
-                onClick={() => setMetricKey('humidity')}
-                className={`px-3 py-1 rounded ${metricKey === 'humidity' ? 'bg-sky-500 text-white' : 'bg-slate-100 text-slate-700'}`}
-              >
-                humidity
-              </button>
-              {/* Tốc độ gió */}
-              <button
-                onClick={() => setMetricKey('windSpeed')}
-                className={`px-3 py-1 rounded ${metricKey === 'windSpeed' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-700'}`}
-              >
-                windSpeed
+                Wind Speed
               </button>
             </div>
-
             <div className="text-sm text-slate-600">
-              Trung bình: <span className="font-medium text-slate-800">{average.toFixed(2)} {metric.unit}</span>
+              Average: <span className="font-medium text-slate-800">{average.toFixed(2)} {unit}</span>
             </div>
           </div>
 
-          <div className="w-full" style={{height: 420}}>
+          <div className="w-full" style={{height:420}}>
             <MetricChart
-              labels={months}
-              values={metric.values}
-              label={metric.label}
-              unit={metric.unit}
-              color={metric.color}
+              labels={labels}
+              values={values}
+              label={metricKey}
+              unit={unit}
+              color={color}
             />
           </div>
         </section>
-
-        <footer className="text-sm text-slate-500 mt-4">
-          The chart illustrate value of {metricKey} during the period
-        </footer>
       </div>
     </div>
   )
