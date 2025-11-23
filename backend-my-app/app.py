@@ -1,59 +1,101 @@
-from flask import Flask, jsonify
-import mysql.connector # Thư viện kết nối MySQL
+
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+import mysql.connector
+from datetime import date, timedelta
 
 app = Flask(__name__)
+CORS(app)
 
-# --- CẤU HÌNH KẾT NỐI DATABASE ---
 def get_db_connection():
-    connection = mysql.connector.connect(
-        host="localhost",       # Địa chỉ server (thường là localhost)
-        user="root",            # Tên đăng nhập DB của bạn
-        password="",    # Mật khẩu DB của bạn
-        database="datamart-database"   # Tên database chứa bảng dữ liệu
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="",
+        database="datamart-database"
     )
-    return connection
-
 @app.route('/')
 def home():
     return "Chào mừng đến với Flask API Weather!"
 
-# --- ENDPOINT MỚI ĐỂ LẤY TEMP VÀ FEELS_LIKE ---
-@app.route('/api/weather-temps', methods=['GET'])
-def get_weather_temps():
+@app.route('/api/cities', methods=['GET'])
+def get_cities():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT city_name FROM fact_weather_report ORDER BY city_name")
+    result = [row[0] for row in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+
+    return jsonify({"status": "success", "cities": result})
+
+@app.route('/api/current-weather', methods=['GET'])
+def get_current_weather():
+    city = request.args.get("city")
+
+    if not city:
+        return jsonify({"error": "City is required"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+                   SELECT city_name, weather_type, actual_date, temp, feels_like, humidity,
+                          wind_speed, 1013 AS pressure, 10 AS visibility
+                   FROM fact_weather_report
+                   WHERE city_name = %s
+                   ORDER BY actual_date DESC
+                       LIMIT 1
+                   """, (city,))
+
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not row:
+        return jsonify({"status": "fail", "message": "City not found"}), 404
+
+    row["actual_date"] = row["actual_date"].strftime('%Y-%m-%d')
+
+    return jsonify({"status": "success", "data": row})
+
+
+
+
+@app.route('/api/weather-metrics', methods=['GET'])
+def get_weather_metrics():
+    city = request.args.get("city")
+    if not city:
+        return jsonify({"status": "fail", "message": "City is required"}), 400
+
     conn = None
     try:
-        # 1. Mở kết nối
         conn = get_db_connection()
-
-        # 2. Tạo con trỏ (cursor) để thực thi lệnh SQL
-        # dictionary=True giúp kết quả trả về dạng {"cot": giatri} thay vì (giatri,)
         cursor = conn.cursor(dictionary=True)
 
-        # 3. Viết câu lệnh SQL để lấy đúng 2 cột bạn cần
-        # Thay 'ten_bang_cua_ban' bằng tên bảng thực tế trong ảnh (ví dụ: weather_data)
-        query = "SELECT temp, feels_like FROM fact_weather_report LIMIT 10"
-
-        cursor.execute(query)
-
-        # 4. Lấy tất cả kết quả
+        query = """
+                SELECT forecast_date, humidity, wind_speed
+                FROM fact_weather_report
+                WHERE city_name = %s AND forecast_date >= CURDATE()
+                ORDER BY forecast_date ASC
+                    LIMIT 6
+                """
+        cursor.execute(query, (city,))
         results = cursor.fetchall()
 
-        # 5. Trả về JSON cho Client
-        return jsonify({
-            "status": "success",
-            "count": len(results),
-            "data": results
-        })
+        for r in results:
+            r['forecast_date'] = r['forecast_date'].strftime('%Y-%m-%d')
+            r['humidity'] = round(r['humidity'], 2)
+            r['wind_speed'] = round(r['wind_speed'], 2)
+
+        return jsonify({"status": "success", "count": len(results), "data": results})
 
     except mysql.connector.Error as err:
-        # Xử lý nếu lỗi kết nối hoặc lỗi SQL
         return jsonify({"error": str(err)}), 500
-
     finally:
-        # 6. Luôn luôn đóng kết nối và cursor để tránh tràn bộ nhớ
         if conn and conn.is_connected():
             cursor.close()
             conn.close()
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5000)
