@@ -14,14 +14,14 @@ import { Chart } from 'react-chartjs-2'
 
 // Đăng ký các phần cần thiết của Chart.js
 ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    PointElement,
+    LineElement,
+    Title,
+    Tooltip,
+    Legend
 )
 
 export default function MetricChart({ labels = [], values = [], label = '', unit = '', color = '#3b82f6' }) {
