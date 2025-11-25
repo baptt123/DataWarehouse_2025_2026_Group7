@@ -6,7 +6,7 @@ from datetime import datetime
 from email.mime.text import MIMEText
 from smtplib import SMTP
 
-CONFIG_PATH = "D:/Warehouse/Test/config.env"
+CONFIG_PATH = "D:/Warehouse/config.env"
 
 
 def load_config():
@@ -58,11 +58,13 @@ def write_log(cfg, id_config, start_time, total, fail, status):
 
 
 def main():
-    # 1.Load config
-    cfg = load_config()
-    # 2.Ghi nhận thời gian bắt đầu
+    # 1.Ghi nhận thời gian bắt đầu
     start_time = datetime.now()
-
+    # 2.Load config
+    cfg = load_config()
+    if not cfg["CONTROL_HOST"]:
+        send_alert("FL_3", "Không load được config từ file .env", cfg)
+        return
     try:
         # 3.Kết nối control db
         control_conn = mysql.connector.connect(
@@ -87,8 +89,7 @@ def main():
         stg.execute("SELECT * FROM stg_weather_report")
         stg_data = stg.fetchall()
         df = pd.DataFrame(stg_data)
-
-        # 5. Kết nối warehouse
+# 5. Kết nối warehouse
         wh_conn = mysql.connector.connect(
             host=conf["warehouse_host"],
             user=conf["warehouse_username"],
@@ -97,7 +98,7 @@ def main():
         )
         wh = wh_conn.cursor(dictionary=True)
 
-        # 6. Xóa dữ liệu cũ
+        # 6. Xóa dữ liệu fact cũ
         wh.execute("DELETE FROM fact_weather_report")
         wh_conn.commit()
 
@@ -143,16 +144,16 @@ def main():
 
             except:
                 fail += 1
-
+        #9.Warehouse commit
         wh_conn.commit()
-        # 9. Ghi log
-        write_log(cfg, id_config, start_time, total, fail, "MODULE 3 SUCCESS")
+        # 10. Ghi log
+        write_log(cfg, id_config, start_time, total, fail, "SC_3")
 
     except Exception as e:
         #Ghi log fail
-        write_log(cfg, id_config, start_time, 0, 0, f"MODULE 3 FAIL: {str(e)}")
+        write_log(cfg, id_config, start_time, 0, 0, "FL_3")
         #Gửi mail cảnh báo
-        send_alert(cfg, "[ETL ERROR] Module 3 Failed", str(e))
+        send_alert(cfg, "FL_3", str(e))
         print("❌ Lỗi:", e)
         return
 
@@ -161,3 +162,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+@Quốc Khá
